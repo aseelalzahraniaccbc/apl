@@ -62,6 +62,11 @@
         .group-subtotal-row td{background:#fafafa;font-weight:600;color:#555;font-style:italic;border-bottom:2px solid #e0e0e0}
 
         @media(max-width:768px){.dashboard-header{flex-direction:column;gap:20px;text-align:center}.summary-grid{grid-template-columns:1fr 1fr}.toolbar{flex-direction:column;align-items:stretch}.toolbar input[type="text"]{min-width:auto;width:100%}.tab-btn{font-size:.9em;padding:15px 10px}}
+        th.sortable{cursor:pointer;user-select:none;position:relative;padding-right:20px !important;}
+        th.sortable::after{content:'⇅';position:absolute;right:4px;top:50%;transform:translateY(-50%);opacity:0.3;font-size:0.75em;}
+        th.sortable.sort-asc::after{content:'▲';opacity:0.8;color:#e65100;}
+        th.sortable.sort-desc::after{content:'▼';opacity:0.8;color:#e65100;}
+        th.sortable:hover{background:rgba(0,0,0,0.04);}
     </style>
 </head>
 <body>
@@ -106,7 +111,7 @@
             <div class="section-card">
                 <h3>👨‍💼 Supervisors Performance</h3>
                 <table class="data-table">
-                    <thead><tr><th>Code</th><th>Supervisor</th><th>Routes</th><th>Target</th><th>Actual</th><th>%TGT</th><th>Remaining</th><th>Progress</th></tr></thead>
+                    <thead><tr><th class="sortable" data-sort="supervisorCode" data-table="sup">Code</th><th class="sortable" data-sort="supervisor" data-table="sup">Supervisor</th><th data-table="sup">Routes</th><th class="sortable" data-sort="target" data-table="sup">Target</th><th class="sortable" data-sort="actualSales" data-table="sup">Actual</th><th class="sortable" data-sort="targetPercent" data-table="sup">%TGT</th><th class="sortable" data-sort="remaining" data-table="sup">Remaining</th><th>Progress</th></tr></thead>
                     <tbody id="spvTableBody"><tr><td colspan="8" class="no-data">Loading…</td></tr></tbody>
                 </table>
             </div>
@@ -120,7 +125,7 @@
                     <div class="toolbar-group"><label>Supervisor:</label><select id="smFiltSPV"><option value="">All</option></select></div>
                 </div>
                 <table class="data-table">
-                    <thead><tr><th>Code</th><th>Salesman</th><th>Route</th><th>Supervisor</th><th>Target</th><th>Actual</th><th>%TGT</th><th>Remaining</th><th>Progress</th></tr></thead>
+                    <thead><tr><th class="sortable" data-sort="salesmanCode" data-table="sm">Code</th><th class="sortable" data-sort="salesman" data-table="sm">Salesman</th><th class="sortable" data-sort="routeCode" data-table="sm">Route</th><th class="sortable" data-sort="supervisor" data-table="sm">Supervisor</th><th class="sortable" data-sort="target" data-table="sm">Target</th><th class="sortable" data-sort="actualSales" data-table="sm">Actual</th><th class="sortable" data-sort="targetPercent" data-table="sm">%TGT</th><th class="sortable" data-sort="remaining" data-table="sm">Remaining</th><th>Progress</th></tr></thead>
                     <tbody id="smTableBody"><tr><td colspan="9" class="no-data">Loading…</td></tr></tbody>
                     <tfoot><tr class="total-row"><td colspan="4">Total</td><td class="sales-val" id="smTotTgt">0</td><td class="sales-val" id="smTotAct">0</td><td class="sales-val" id="smTotPct">0%</td><td id="smTotRem">0</td><td></td></tr></tfoot>
                 </table>
@@ -139,10 +144,9 @@
                     <div class="toolbar-group"><label>Customer:</label><select id="filtCust"><option value="">All</option></select></div>
                     <div class="toolbar-group"><label>Date:</label><select id="filtDate"><option value="">All</option></select></div>
                     <div class="toolbar-group"><label>Group By:</label><select id="custGroupBy"><option value="">None</option><option value="supervisor">Supervisor</option><option value="salesman">Salesman</option><option value="brand">Brand</option><option value="customer">Customer</option><option value="dayDate">Date</option></select></div>
-                    <div class="toolbar-group"><label>Sort:</label><select id="custSortBy"><option value="">Default</option><option value="customer-asc">Customer ↑</option><option value="customer-desc">Customer ↓</option><option value="brand-asc">Brand ↑</option><option value="brand-desc">Brand ↓</option><option value="actualCY-asc">ACT-CY ↑</option><option value="actualCY-desc">ACT-CY ↓</option><option value="dayDate-asc">Date ↑</option><option value="dayDate-desc">Date ↓</option></select></div>
                 </div>
                 <table class="data-table">
-                    <thead><tr><th>Supervisor</th><th>Salesman</th><th>Route</th><th>Code</th><th>Customer</th><th>Brand</th><th>Product</th><th>Date</th><th>ACT-CY</th><th>ACT-LY</th></tr></thead>
+                    <thead><tr><th class="sortable" data-sort="supervisor" data-table="cust">Supervisor</th><th class="sortable" data-sort="salesman" data-table="cust">Salesman</th><th class="sortable" data-sort="routeCode" data-table="cust">Route</th><th class="sortable" data-sort="customerCode" data-table="cust">Code</th><th class="sortable" data-sort="customer" data-table="cust">Customer</th><th class="sortable" data-sort="brand" data-table="cust">Brand</th><th class="sortable" data-sort="product" data-table="cust">Product</th><th class="sortable" data-sort="dayDate" data-table="cust">Date</th><th class="sortable" data-sort="actualCY" data-table="cust">ACT-CY</th><th class="sortable" data-sort="actualLY" data-table="cust">ACT-LY</th></tr></thead>
                     <tbody id="custTableBody"><tr><td colspan="10" class="no-data">Loading…</td></tr></tbody>
                     <tfoot><tr class="total-row"><td colspan="8">Total</td><td class="sales-val"><span id="custTotCY">0</span></td><td class="sales-val"><span id="custTotLY">0</span></td></tr></tfoot>
                 </table>
@@ -195,26 +199,33 @@ function switchTab(t){
     document.querySelectorAll('.tab-btn').forEach((b,i)=>{b.classList.toggle('active',i===['supervisors','salesmen','customers'].indexOf(t));});
 }
 
+/* ══ COLUMN SORT STATE ══ */
+let supSortField='',supSortDir='asc';
+let smSortField2='',smSortDir2='asc';
+let custSortField='',custSortDir='asc';
+
 /* ══ TAB 1: Supervisors ══ */
 function renderSPVTable(){
     const tbody=document.getElementById('spvTableBody');
-    // Group sup_sales by supervisor code
     const spvMap={};
     mySupervisors.forEach(s=>{
-        if(!spvMap[s.supervisorCode]) spvMap[s.supervisorCode]={code:s.supervisorCode,name:s.supervisor,routes:[],tgt:0,act:0};
+        if(!spvMap[s.supervisorCode]) spvMap[s.supervisorCode]={supervisorCode:s.supervisorCode,supervisor:s.supervisor,routes:[],target:0,actualSales:0};
         spvMap[s.supervisorCode].routes.push(s.routeCode);
-        spvMap[s.supervisorCode].tgt+=s.target;
-        spvMap[s.supervisorCode].act+=s.actualSales;
+        spvMap[s.supervisorCode].target+=s.target;
+        spvMap[s.supervisorCode].actualSales+=s.actualSales;
     });
-    const spvList=Object.values(spvMap);
+    let spvList=Object.values(spvMap);
+    spvList.forEach(s=>{s.targetPercent=s.target?(s.actualSales/s.target*100):0;s.remaining=s.target-s.actualSales;});
+    if(supSortField){const m=supSortDir==='desc'?-1:1;spvList.sort((a,b)=>{const va=a[supSortField],vb=b[supSortField];if(typeof va==='number')return(va-vb)*m;return String(va||'').localeCompare(String(vb||''))*m;});}
     if(!spvList.length){tbody.innerHTML='<tr><td colspan="8" class="no-data">No supervisors assigned</td></tr>';return;}
     let html='';
     spvList.forEach(s=>{
-        const pct=s.tgt?(s.act/s.tgt*100):0;const rem=s.tgt-s.act;
+        const pct=s.targetPercent;const rem=s.remaining;
         const cls=pct>=95?'pct-high':pct>=85?'pct-mid':'pct-low';
-        html+=`<tr><td>${sanitize(s.code)}</td><td style="font-weight:600;color:#333">${sanitize(s.name)}</td><td>${s.routes.join(', ')}</td><td>${s.tgt.toLocaleString()}</td><td class="sales-val">${s.act.toLocaleString()}</td><td><span class="pct-badge ${cls}">${pct.toFixed(1)}%</span></td><td>${rem>0?rem.toLocaleString():'—'}</td><td><div class="mini-progress"><div class="mini-progress-fill" style="width:${Math.min(pct,100)}%"></div></div></td></tr>`;
+        html+=`<tr><td>${sanitize(s.supervisorCode)}</td><td style="font-weight:600;color:#333">${sanitize(s.supervisor)}</td><td>${s.routes.join(', ')}</td><td>${s.target.toLocaleString()}</td><td class="sales-val">${s.actualSales.toLocaleString()}</td><td><span class="pct-badge ${cls}">${pct.toFixed(1)}%</span></td><td>${rem>0?rem.toLocaleString():'—'}</td><td><div class="mini-progress"><div class="mini-progress-fill" style="width:${Math.min(pct,100)}%"></div></div></td></tr>`;
     });
     tbody.innerHTML=html;
+    document.querySelectorAll('th.sortable[data-table="sup"]').forEach(th=>{th.classList.remove('sort-asc','sort-desc');if(th.dataset.sort===supSortField)th.classList.add('sort-'+supSortDir);});
 }
 
 /* ══ TAB 2: All Salesmen ══ */
@@ -222,20 +233,22 @@ function renderSMTable(){
     const fSPV=document.getElementById('smFiltSPV').value;
     let data=[...mySalesmen];
     if(fSPV) data=data.filter(s=>String(s.assignedSPV)===fSPV);
+    data.forEach(s=>{s.remaining=s.target-s.actualSales;const spv=mySupervisors.find(x=>x.supervisorCode==s.assignedSPV);s.supervisor=spv?spv.supervisor:String(s.assignedSPV);});
+    if(smSortField2){const m=smSortDir2==='desc'?-1:1;data.sort((a,b)=>{const va=a[smSortField2],vb=b[smSortField2];if(typeof va==='number')return(va-vb)*m;return String(va||'').localeCompare(String(vb||''))*m;});}
     const tbody=document.getElementById('smTableBody');
     if(!data.length){tbody.innerHTML='<tr><td colspan="9" class="no-data">No salesmen found</td></tr>';return;}
     let html='',tT=0,tA=0;
     data.forEach(s=>{
-        const spv=mySupervisors.find(x=>x.supervisorCode==s.assignedSPV);const spvName=spv?spv.supervisor:s.assignedSPV;
         const rem=s.target-s.actualSales;const pct=s.targetPercent;
         const cls=pct>=95?'pct-high':pct>=85?'pct-mid':'pct-low';
         tT+=s.target;tA+=s.actualSales;
-        html+=`<tr><td>${sanitize(s.salesmanCode)}</td><td style="font-weight:600;color:#333">${sanitize(s.salesman)}</td><td>${sanitize(s.routeCode)}</td><td>${sanitize(spvName)}</td><td>${s.target.toLocaleString()}</td><td class="sales-val">${s.actualSales.toLocaleString()}</td><td><span class="pct-badge ${cls}">${pct.toFixed(1)}%</span></td><td>${rem>0?rem.toLocaleString():'—'}</td><td><div class="mini-progress"><div class="mini-progress-fill" style="width:${Math.min(pct,100)}%"></div></div></td></tr>`;
+        html+=`<tr><td>${sanitize(s.salesmanCode)}</td><td style="font-weight:600;color:#333">${sanitize(s.salesman)}</td><td>${sanitize(s.routeCode)}</td><td>${sanitize(s.supervisor)}</td><td>${s.target.toLocaleString()}</td><td class="sales-val">${s.actualSales.toLocaleString()}</td><td><span class="pct-badge ${cls}">${pct.toFixed(1)}%</span></td><td>${rem>0?rem.toLocaleString():'—'}</td><td><div class="mini-progress"><div class="mini-progress-fill" style="width:${Math.min(pct,100)}%"></div></div></td></tr>`;
     });
     tbody.innerHTML=html;
     const oP=tT?(tA/tT*100):0;
     document.getElementById('smTotTgt').textContent=tT.toLocaleString();document.getElementById('smTotAct').textContent=tA.toLocaleString();
     document.getElementById('smTotPct').textContent=oP.toFixed(1)+'%';document.getElementById('smTotRem').textContent=(tT-tA>0?(tT-tA).toLocaleString():'—');
+    document.querySelectorAll('th.sortable[data-table="sm"]').forEach(th=>{th.classList.remove('sort-asc','sort-desc');if(th.dataset.sort===smSortField2)th.classList.add('sort-'+smSortDir2);});
 }
 
 /* ══ TAB 3: All Customers ══ */
@@ -247,8 +260,9 @@ function getCustFiltered(){
     if(fSM)d=d.filter(r=>String(r.salesmanCode)===fSM);
     if(fB)d=d.filter(r=>r.brand===fB);if(fC)d=d.filter(r=>r.customer===fC);if(fD)d=d.filter(r=>r.dayDate===fD);
     if(q)d=d.filter(r=>[r.customerCode,r.customer,r.brand,r.product,r.dayDate,String(r.salesmanCode)].some(v=>String(v).toLowerCase().includes(q)));
-    const sv=document.getElementById('custSortBy').value;
-    if(sv){const[f,dir]=sv.split('-');const m=dir==='desc'?-1:1;d.sort((a,b)=>typeof a[f]==='number'?(a[f]-b[f])*m:String(a[f]).localeCompare(String(b[f]))*m);}
+    // Add computed fields for sorting
+    d.forEach(r=>{const spv=mySupervisors.find(x=>x.supervisorCode==r.assignedSPV);r.supervisor=spv?spv.supervisor:String(r.assignedSPV);const sm=mySalesmen.find(x=>x.salesmanCode==r.salesmanCode);r.salesman=sm?sm.salesman:String(r.salesmanCode);});
+    if(custSortField){const m=custSortDir==='desc'?-1:1;d.sort((a,b)=>{const va=a[custSortField],vb=b[custSortField];if(typeof va==='number')return(va-vb)*m;return String(va||'').localeCompare(String(vb||''))*m;});}
     return d;
 }
 
@@ -270,6 +284,7 @@ function renderCustTable(){
             html+=`<tr class="group-subtotal-row"><td colspan="8">Subtotal — ${sanitize(k)}</td><td>${sCY.toLocaleString()}</td><td>${sLY.toLocaleString()}</td></tr>`;tCY+=sCY;tLY+=sLY;});
     }else{data.forEach(c=>{const cy=+c.actualCY||0,ly=+c.actualLY||0;tCY+=cy;tLY+=ly;html+=cRow(c,cy,ly);});}
     tbody.innerHTML=html;document.getElementById('custTotCY').textContent=tCY.toLocaleString();document.getElementById('custTotLY').textContent=tLY.toLocaleString();
+    document.querySelectorAll('th.sortable[data-table="cust"]').forEach(th=>{th.classList.remove('sort-asc','sort-desc');if(th.dataset.sort===custSortField)th.classList.add('sort-'+custSortDir);});
 }
 
 function cRow(c,cy,ly){
@@ -315,10 +330,18 @@ function showDashboard(user){
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
-    ['custSearch','filtSPV','filtSM','filtBrand','filtCust','filtDate','custGroupBy','custSortBy'].forEach(id=>{
-        const el=document.getElementById(id);el.addEventListener(el.tagName==='INPUT'?'input':'change',renderCustTable);
+    ['custSearch','filtSPV','filtSM','filtBrand','filtCust','filtDate','custGroupBy'].forEach(id=>{
+        const el=document.getElementById(id);if(el)el.addEventListener(el.tagName==='INPUT'?'input':'change',renderCustTable);
     });
     document.getElementById('smFiltSPV').addEventListener('change',renderSMTable);
+    document.querySelectorAll('th.sortable').forEach(th=>{
+        th.addEventListener('click',function(){
+            const f=this.dataset.sort,t=this.dataset.table||'cust';
+            if(t==='sup'){if(supSortField===f)supSortDir=supSortDir==='asc'?'desc':'asc';else{supSortField=f;supSortDir='asc';}renderSPVTable();}
+            else if(t==='sm'){if(smSortField2===f)smSortDir2=smSortDir2==='asc'?'desc':'asc';else{smSortField2=f;smSortDir2='asc';}renderSMTable();}
+            else{if(custSortField===f)custSortDir=custSortDir==='asc'?'desc':'asc';else{custSortField=f;custSortDir='asc';}renderCustTable();}
+        });
+    });
 });
 
 window.onload=async function(){await loadData();const s=sessionStorage.getItem('loggedInBSM');if(s){const u=JSON.parse(s);

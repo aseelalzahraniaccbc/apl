@@ -125,6 +125,11 @@
             .toolbar input{min-width:auto;width:100%}
             .rating-btn{width:40px;height:40px;font-size:.95em}
         }
+        th.sortable{cursor:pointer;user-select:none;position:relative;padding-right:20px !important;}
+        th.sortable::after{content:'⇅';position:absolute;right:4px;top:50%;transform:translateY(-50%);opacity:0.3;font-size:0.75em;}
+        th.sortable.sort-asc::after{content:'▲';opacity:0.8;color:#2e7d32;}
+        th.sortable.sort-desc::after{content:'▼';opacity:0.8;color:#2e7d32;}
+        th.sortable:hover{background:rgba(0,0,0,0.04);}
     </style>
 </head>
 <body>
@@ -169,10 +174,9 @@
             <input type="text" id="detailSearch" placeholder="🔍 Search products...">
             <div class="toolbar-group"><label>Brand:</label><select id="filtBrand"><option value="">All</option></select></div>
             <div class="toolbar-group"><label>Date:</label><select id="filtDate"><option value="">All</option></select></div>
-            <div class="toolbar-group"><label>Sort:</label><select id="detailSort"><option value="">Default</option><option value="brand-asc">Brand ↑</option><option value="actualCY-desc">ACT-CY ↓</option><option value="actualCY-asc">ACT-CY ↑</option><option value="dayDate-desc">Date ↓</option><option value="dayDate-asc">Date ↑</option></select></div>
         </div>
         <table class="data-table">
-            <thead><tr><th>Brand</th><th>Product Group</th><th>Sub Brand</th><th>Product</th><th>Date</th><th>ACT-CY</th><th>ACT-LY</th><th>Var %</th></tr></thead>
+            <thead><tr><th class="sortable" data-sort="brand">Brand</th><th class="sortable" data-sort="productGroup">Product Group</th><th class="sortable" data-sort="subBrand">Sub Brand</th><th class="sortable" data-sort="product">Product</th><th class="sortable" data-sort="dayDate">Date</th><th class="sortable" data-sort="actualCY">ACT-CY</th><th class="sortable" data-sort="actualLY">ACT-LY</th><th class="sortable" data-sort="varPct">Var %</th></tr></thead>
             <tbody id="detailTableBody"><tr><td colspan="8" class="no-data">Loading…</td></tr></tbody>
             <tfoot><tr class="total-row"><td colspan="5">Total</td><td id="detailTotalCY">0</td><td id="detailTotalLY">0</td><td></td></tr></tfoot>
         </table>
@@ -298,6 +302,7 @@ window.onload=function(){
 };
 
 // ══ DETAIL TABLE ══
+let detSortField='',detSortDir='asc';
 function getFilteredDetail(){
     let d=[...customerData];
     const q=document.getElementById('detailSearch').value.toLowerCase();
@@ -306,8 +311,9 @@ function getFilteredDetail(){
     if(fB)d=d.filter(r=>r.brand===fB);
     if(fD)d=d.filter(r=>r.dayDate===fD);
     if(q)d=d.filter(r=>[r.brand,r.product,r.productGroup,r.subBrand,r.dayDate].some(v=>String(v).toLowerCase().includes(q)));
-    const sv=document.getElementById('detailSort').value;
-    if(sv){const[f,dir]=sv.split('-');const m=dir==='desc'?-1:1;d.sort((a,b)=>typeof a[f]==='number'?(a[f]-b[f])*m:String(a[f]).localeCompare(String(b[f]))*m);}
+    // Add varPct for sorting
+    d.forEach(r=>{r.varPct=(+r.actualLY)?((+r.actualCY-(+r.actualLY))/(+r.actualLY)*100):0;});
+    if(detSortField){const m=detSortDir==='desc'?-1:1;d.sort((a,b)=>{const va=a[detSortField],vb=b[detSortField];if(typeof va==='number')return(va-vb)*m;return String(va||'').localeCompare(String(vb||''))*m;});}
     return d;
 }
 
@@ -326,6 +332,8 @@ function renderDetailTable(){
     tbody.innerHTML=html;
     document.getElementById('detailTotalCY').textContent=tCY.toLocaleString();
     document.getElementById('detailTotalLY').textContent=tLY.toLocaleString();
+    // Sort arrows
+    document.querySelectorAll('th.sortable').forEach(th=>{th.classList.remove('sort-asc','sort-desc');if(th.dataset.sort===detSortField)th.classList.add('sort-'+detSortDir);});
 }
 
 // ══ SURVEY ══
@@ -369,10 +377,11 @@ document.addEventListener('DOMContentLoaded',()=>{
         });
         this.value='';
     });
-    ['detailSearch','filtBrand','filtDate','detailSort'].forEach(id=>{
+    ['detailSearch','filtBrand','filtDate'].forEach(id=>{
         const el=document.getElementById(id);
         if(el)el.addEventListener(el.tagName==='INPUT'?'input':'change',renderDetailTable);
     });
+    document.querySelectorAll('th.sortable').forEach(th=>{th.addEventListener('click',function(){const f=this.dataset.sort;if(detSortField===f)detSortDir=detSortDir==='asc'?'desc':'asc';else{detSortField=f;detSortDir='asc';}renderDetailTable();});});
 });
 
 function renderPhotoPreview(){

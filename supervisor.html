@@ -98,7 +98,11 @@
         .cust-summary-row td:first-child{text-align:center;font-size:0.85em;color:#888;}
         .var-positive{color:#2e7d32;font-weight:600;}
         .var-negative{color:#c62828;font-weight:600;}
-        .product-count-badge{background:#e8f5e9;color:#2e7d32;padding:2px 8px;border-radius:10px;font-size:0.85em;font-weight:600;}
+        th.sortable{cursor:pointer;user-select:none;position:relative;padding-right:20px !important;}
+        th.sortable::after{content:'⇅';position:absolute;right:4px;top:50%;transform:translateY(-50%);opacity:0.3;font-size:0.75em;}
+        th.sortable.sort-asc::after{content:'▲';opacity:0.8;color:#2e7d32;}
+        th.sortable.sort-desc::after{content:'▼';opacity:0.8;color:#2e7d32;}
+        th.sortable:hover{background:rgba(0,0,0,0.04);}
     </style>
 </head>
 <body>
@@ -147,7 +151,7 @@
             <div class="section-card">
                 <h3>👥 My Salesmen — Performance Overview</h3>
                 <table class="data-table">
-                    <thead><tr><th>Code</th><th>Salesman</th><th>Route</th><th>Target</th><th>Actual</th><th>%TGT</th><th>Remaining</th><th>Progress</th></tr></thead>
+                    <thead><tr><th class="sortable" data-sort="salesmanCode" data-table="sm">Code</th><th class="sortable" data-sort="salesman" data-table="sm">Salesman</th><th class="sortable" data-sort="routeCode" data-table="sm">Route</th><th class="sortable" data-sort="target" data-table="sm">Target</th><th class="sortable" data-sort="actualSales" data-table="sm">Actual</th><th class="sortable" data-sort="targetPercent" data-table="sm">%TGT</th><th class="sortable" data-sort="remaining" data-table="sm">Remaining</th><th>Progress</th></tr></thead>
                     <tbody id="salesmenTableBody"><tr><td colspan="8" class="no-data">Loading…</td></tr></tbody>
                     <tfoot><tr class="total-row"><td colspan="3">Total</td><td class="sales-val" id="smTotalTgt">0</td><td class="sales-val" id="smTotalAct">0</td><td class="sales-val" id="smTotalPct">0%</td><td class="sales-val" id="smTotalRem">0</td><td></td></tr></tfoot>
                 </table>
@@ -161,14 +165,14 @@
                 <div class="toolbar">
                     <input type="text" id="custSearch" placeholder="🔍 Search...">
                     <div class="toolbar-group"><label>Salesman:</label><select id="filtSalesman"><option value="">All</option></select></div>
-                    <div class="toolbar-group"><label>Brand:</label><select id="filtBrand"><option value="">All</option></select></div>
+                    <div class="toolbar-group"><label>Customer Code:</label><select id="filtCustCode"><option value="">All</option></select></div>
                     <div class="toolbar-group"><label>Customer:</label><select id="filtCustomer"><option value="">All</option></select></div>
-                    <div class="toolbar-group"><label>Sort:</label><select id="custSortBy"><option value="">Default</option><option value="customer-asc">Customer ↑</option><option value="customer-desc">Customer ↓</option><option value="totalCY-desc">ACT-CY ↓</option><option value="totalCY-asc">ACT-CY ↑</option><option value="totalLY-desc">ACT-LY ↓</option><option value="totalLY-asc">ACT-LY ↑</option></select></div>
+                    <div class="toolbar-group"><label>Route:</label><select id="filtRoute"><option value="">All</option></select></div>
                 </div>
-                <table class="data-table">
-                    <thead><tr><th style="width:30px"></th><th>Code</th><th>Customer</th><th>Salesman</th><th>Route</th><th>Products</th><th>ACT-CY</th><th>ACT-LY</th><th>Var %</th></tr></thead>
-                    <tbody id="custTableBody"><tr><td colspan="9" class="no-data">Loading…</td></tr></tbody>
-                    <tfoot><tr class="total-row"><td colspan="6">Total</td><td class="sales-val"><span id="custTotalCY">0</span></td><td class="sales-val"><span id="custTotalLY">0</span></td><td></td></tr></tfoot>
+                <table class="data-table" id="custTable">
+                    <thead><tr><th style="width:30px"></th><th class="sortable" data-sort="code">Code</th><th class="sortable" data-sort="customer">Customer</th><th class="sortable" data-sort="salesman">Salesman</th><th class="sortable" data-sort="routeCode">Route</th><th class="sortable" data-sort="totalCY">ACT-CY</th><th class="sortable" data-sort="totalLY">ACT-LY</th><th class="sortable" data-sort="varPct">Var %</th></tr></thead>
+                    <tbody id="custTableBody"><tr><td colspan="8" class="no-data">Loading…</td></tr></tbody>
+                    <tfoot><tr class="total-row"><td colspan="5">Total</td><td class="sales-val"><span id="custTotalCY">0</span></td><td class="sales-val"><span id="custTotalLY">0</span></td><td></td></tr></tfoot>
                 </table>
             </div>
         </div>
@@ -237,8 +241,13 @@ function switchTab(tab){
 function renderSalesmenTable(){
     const tbody=document.getElementById('salesmenTableBody');
     if(!mySalesmen.length){tbody.innerHTML='<tr><td colspan="8" class="no-data">No salesmen assigned</td></tr>';return;}
+    let sorted=[...mySalesmen].map(s=>({...s,remaining:s.target-s.actualSales}));
+    if(smSortField){
+        const m=smSortDir==='desc'?-1:1;
+        sorted.sort((a,b)=>{const va=a[smSortField],vb=b[smSortField];if(typeof va==='number')return(va-vb)*m;return String(va||'').localeCompare(String(vb||''))*m;});
+    }
     let html='',tTgt=0,tAct=0;
-    mySalesmen.forEach(s=>{
+    sorted.forEach(s=>{
         const rem=s.target-s.actualSales;const pct=s.targetPercent;
         const cls=pct>=100?'pct-high':pct>=85?'pct-mid':'pct-low';
         tTgt+=s.target;tAct+=s.actualSales;
@@ -256,31 +265,43 @@ function renderSalesmenTable(){
     document.getElementById('smTotalAct').textContent=tAct.toLocaleString();
     document.getElementById('smTotalPct').textContent=oPct.toFixed(1)+'%';
     document.getElementById('smTotalRem').textContent=(tTgt-tAct>0?(tTgt-tAct).toLocaleString():'—');
+    // Update arrows on salesmen table header
+    document.querySelectorAll('th.sortable[data-table="sm"]').forEach(th=>{th.classList.remove('sort-asc','sort-desc');if(th.dataset.sort===smSortField)th.classList.add('sort-'+smSortDir);});
 }
 
 /* ══ TAB 2: CUSTOMERS TABLE (Summary → Click to Detail Page) ══ */
+let custSortField='customer',custSortDir='asc';
+let smSortField='',smSortDir='asc';
+
 function getCustomerSummaries(){
     let d=[...myMasterData];
     const q=document.getElementById('custSearch').value.toLowerCase();
     const fS=document.getElementById('filtSalesman').value;
-    const fB=document.getElementById('filtBrand').value;
+    const fCC=document.getElementById('filtCustCode').value;
     const fC=document.getElementById('filtCustomer').value;
+    const fR=document.getElementById('filtRoute').value;
     if(fS)d=d.filter(r=>String(r.salesmanCode)===fS);
-    if(fB)d=d.filter(r=>r.brand===fB);
+    if(fCC)d=d.filter(r=>String(r.customerCode)===fCC);
     if(fC)d=d.filter(r=>r.customer===fC);
-    if(q)d=d.filter(r=>[r.customerCode,r.customer,r.brand,r.product,String(r.salesmanCode)].some(v=>String(v).toLowerCase().includes(q)));
+    if(fR)d=d.filter(r=>String(r.routeCode)===fR);
+    if(q)d=d.filter(r=>[r.customerCode,r.customer,r.brand,r.product,String(r.salesmanCode),String(r.routeCode)].some(v=>String(v).toLowerCase().includes(q)));
     const map={};
     d.forEach(r=>{
         const key=r.customerCode;
-        if(!map[key]){const sm=mySalesmen.find(s=>s.salesmanCode==r.salesmanCode);map[key]={code:key,name:r.customer,salesman:sm?sm.salesman:String(r.salesmanCode),routeCode:r.routeCode,salesmanCode:r.salesmanCode,totalCY:0,totalLY:0,products:0,rows:[]};}
+        if(!map[key]){const sm=mySalesmen.find(s=>s.salesmanCode==r.salesmanCode);map[key]={code:key,name:r.customer,salesman:sm?sm.salesman:String(r.salesmanCode),routeCode:r.routeCode,salesmanCode:r.salesmanCode,totalCY:0,totalLY:0,rows:[]};}
         map[key].totalCY+=(+r.actualCY||0);map[key].totalLY+=(+r.actualLY||0);map[key].rows.push(r);
     });
-    Object.values(map).forEach(c=>{c.products=[...new Set(c.rows.map(r=>r.product))].length;});
     let summaries=Object.values(map);
-    const sv=document.getElementById('custSortBy').value;
-    if(sv){const[f,dir]=sv.split('-');const m=dir==='desc'?-1:1;
-        summaries.sort((a,b)=>{if(f==='totalCY')return(a.totalCY-b.totalCY)*m;if(f==='totalLY')return(a.totalLY-b.totalLY)*m;if(f==='customer')return a.name.localeCompare(b.name)*m;return 0;});
-    }else{summaries.sort((a,b)=>a.name.localeCompare(b.name));}
+    summaries.forEach(c=>{c.varPct=c.totalLY?((c.totalCY-c.totalLY)/c.totalLY*100):0;});
+    if(custSortField){
+        const m=custSortDir==='desc'?-1:1;
+        summaries.sort((a,b)=>{
+            let va=a[custSortField],vb=b[custSortField];
+            if(custSortField==='customer'){va=a.name;vb=b.name;}
+            if(typeof va==='number')return(va-vb)*m;
+            return String(va||'').localeCompare(String(vb||''))*m;
+        });
+    }
     return summaries;
 }
 
@@ -296,27 +317,36 @@ function openCustomerDetail(code){
 function renderCustTable(){
     const summaries=getCustomerSummaries();
     const tbody=document.getElementById('custTableBody');
-    if(!summaries.length){tbody.innerHTML='<tr><td colspan="9" class="no-data">No data found</td></tr>';document.getElementById('custTotalCY').textContent='0';document.getElementById('custTotalLY').textContent='0';return;}
+    if(!summaries.length){tbody.innerHTML='<tr><td colspan="8" class="no-data">No data found</td></tr>';document.getElementById('custTotalCY').textContent='0';document.getElementById('custTotalLY').textContent='0';return;}
     let html='',tCY=0,tLY=0;
     summaries.forEach(c=>{
         tCY+=c.totalCY;tLY+=c.totalLY;
-        const varPct=c.totalLY?(((c.totalCY-c.totalLY)/c.totalLY)*100):0;
-        const varCls=varPct>=0?'var-positive':'var-negative';
-        const varStr=(varPct>=0?'+':'')+varPct.toFixed(1)+'%';
+        const varCls=c.varPct>=0?'var-positive':'var-negative';
+        const varStr=(c.varPct>=0?'+':'')+c.varPct.toFixed(1)+'%';
         html+=`<tr class="cust-summary-row" onclick="openCustomerDetail('${sanitize(c.code)}')">
             <td>🔗</td><td style="font-weight:600">${sanitize(c.code)}</td><td style="font-weight:600;color:#333">${sanitize(c.name)}</td>
-            <td>${sanitize(c.salesman)}</td><td>${sanitize(c.routeCode)}</td><td><span class="product-count-badge">${c.products}</span></td>
+            <td>${sanitize(c.salesman)}</td><td>${sanitize(c.routeCode)}</td>
             <td class="sales-val">${c.totalCY.toLocaleString()}</td><td>${c.totalLY.toLocaleString()}</td><td><span class="${varCls}">${varStr}</span></td></tr>`;
     });
     tbody.innerHTML=html;document.getElementById('custTotalCY').textContent=tCY.toLocaleString();document.getElementById('custTotalLY').textContent=tLY.toLocaleString();
+    updateSortArrows('custTable',custSortField,custSortDir);
 }
 
 function populateCustFilters(){
     const fill=(id,vals,lbl)=>{const s=document.getElementById(id);s.innerHTML=`<option value="">All ${lbl}</option>`;vals.forEach(v=>{s.innerHTML+=`<option value="${sanitize(v[0])}">${sanitize(v[1])}</option>`;});};
     const smOpts=mySalesmen.map(s=>[String(s.salesmanCode), `${s.salesman} (${s.salesmanCode})`]);
     fill('filtSalesman',smOpts,'Salesmen');
-    fill('filtBrand',[...new Set(myMasterData.map(r=>r.brand))].sort().map(v=>[v,v]),'Brands');
+    fill('filtCustCode',[...new Set(myMasterData.map(r=>r.customerCode))].sort().map(v=>[v,v]),'Codes');
     fill('filtCustomer',[...new Set(myMasterData.map(r=>r.customer))].sort().map(v=>[v,v]),'Customers');
+    fill('filtRoute',[...new Set(myMasterData.map(r=>String(r.routeCode)))].sort((a,b)=>Number(a)-Number(b)).map(v=>[v,v]),'Routes');
+}
+
+// ══ COLUMN SORT UTIL ══
+function updateSortArrows(tableId,field,dir){
+    const table=document.getElementById(tableId);if(!table)return;
+    table.querySelectorAll('th.sortable').forEach(th=>{th.classList.remove('sort-asc','sort-desc');
+        if(th.dataset.sort===field)th.classList.add('sort-'+dir);
+    });
 }
 
 /* ══ TAB 3: SURVEYS ══ */
@@ -463,11 +493,24 @@ function showDashboard(user){
 
 /* ══ EVENTS ══ */
 document.addEventListener('DOMContentLoaded',()=>{
-    ['custSearch','filtSalesman','filtBrand','filtCustomer','custSortBy'].forEach(id=>{
+    ['custSearch','filtSalesman','filtCustCode','filtCustomer','filtRoute'].forEach(id=>{
         const el=document.getElementById(id);el.addEventListener(el.tagName==='INPUT'?'input':'change',renderCustTable);
     });
     ['surveySearch','survFiltSM','survFiltCust','survFiltRating','survSortBy'].forEach(id=>{
         const el=document.getElementById(id);el.addEventListener(el.tagName==='INPUT'?'input':'change',renderSurveyTable);
+    });
+    // Column sort click handlers
+    document.querySelectorAll('th.sortable').forEach(th=>{
+        th.addEventListener('click',function(){
+            const field=this.dataset.sort;const table=this.dataset.table||'cust';
+            if(table==='sm'){
+                if(smSortField===field)smSortDir=smSortDir==='asc'?'desc':'asc';else{smSortField=field;smSortDir='asc';}
+                renderSalesmenTable();
+            }else{
+                if(custSortField===field)custSortDir=custSortDir==='asc'?'desc':'asc';else{custSortField=field;custSortDir='asc';}
+                renderCustTable();
+            }
+        });
     });
 });
 

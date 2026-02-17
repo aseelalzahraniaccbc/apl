@@ -147,6 +147,11 @@
             .modal-box{border-radius:15px}
             .modal-header,.modal-body{padding:20px}
         }
+        th.sortable{cursor:pointer;user-select:none;position:relative;padding-right:20px !important;}
+        th.sortable::after{content:'⇅';position:absolute;right:4px;top:50%;transform:translateY(-50%);opacity:0.3;font-size:0.75em;}
+        th.sortable.sort-asc::after{content:'▲';opacity:0.8;color:#2196F3;}
+        th.sortable.sort-desc::after{content:'▼';opacity:0.8;color:#2196F3;}
+        th.sortable:hover{background:rgba(0,0,0,0.04);}
     </style>
 </head>
 <body>
@@ -208,9 +213,8 @@
                 <div class="toolbar-group"><label>Product:</label><select id="filterProduct"><option value="">All</option></select></div>
                 <div class="toolbar-group"><label>Date:</label><select id="filterDate"><option value="">All</option></select></div>
                 <div class="toolbar-group"><label>Group By:</label><select id="groupBy"><option value="">None</option><option value="brand">Brand</option><option value="customer">Customer</option><option value="product">Product</option><option value="dayDate">Date</option></select></div>
-                <div class="toolbar-group"><label>Sort:</label><select id="sortBy"><option value="">Default</option><option value="customer-asc">Customer ↑</option><option value="customer-desc">Customer ↓</option><option value="brand-asc">Brand ↑</option><option value="brand-desc">Brand ↓</option><option value="actualCY-asc">ACT-CY ↑</option><option value="actualCY-desc">ACT-CY ↓</option><option value="dayDate-asc">Date ↑</option><option value="dayDate-desc">Date ↓</option></select></div>
             </div>
-            <table class="customers-table"><thead><tr><th>Code</th><th>Customer</th><th>Brand</th><th>Product</th><th>Date</th><th>ACT-CY</th><th>ACT-LY</th></tr></thead><tbody id="customersTableBody"><tr><td colspan="7" class="no-data">Loading…</td></tr></tbody><tfoot><tr class="total-row"><td colspan="5">Total</td><td class="customer-sales"><span id="totalACTCY">0</span> SAR</td><td class="customer-sales"><span id="totalACTLY">0</span> SAR</td></tr></tfoot></table>
+            <table class="customers-table" id="custTable"><thead><tr><th class="sortable" data-sort="customerCode">Code</th><th class="sortable" data-sort="customer">Customer</th><th class="sortable" data-sort="brand">Brand</th><th class="sortable" data-sort="product">Product</th><th class="sortable" data-sort="dayDate">Date</th><th class="sortable" data-sort="actualCY">ACT-CY</th><th class="sortable" data-sort="actualLY">ACT-LY</th></tr></thead><tbody id="customersTableBody"><tr><td colspan="7" class="no-data">Loading…</td></tr></tbody><tfoot><tr class="total-row"><td colspan="5">Total</td><td class="customer-sales"><span id="totalACTCY">0</span> SAR</td><td class="customer-sales"><span id="totalACTLY">0</span> SAR</td></tr></tfoot></table>
         </div>
     </div>
 </div>
@@ -375,13 +379,13 @@ async function loadData(){
 }}
 
 /* ══════════ CUSTOMERS TABLE ══════════ */
+let smCustSortField='',smCustSortDir='asc';
 function getFiltered(){
     const q=document.getElementById('customerSearch').value.toLowerCase(),fB=document.getElementById('filterBrand').value,fC=document.getElementById('filterCustomer').value,fP=document.getElementById('filterProduct').value,fD=document.getElementById('filterDate').value;
     let d=[...myCustomers];
     if(fB)d=d.filter(r=>r.brand===fB);if(fC)d=d.filter(r=>r.customer===fC);if(fP)d=d.filter(r=>r.product===fP);if(fD)d=d.filter(r=>r.dayDate===fD);
     if(q)d=d.filter(r=>[r.customerCode,r.customer,r.brand,r.product,r.dayDate].some(v=>String(v).toLowerCase().includes(q)));
-    const sv=document.getElementById('sortBy').value;
-    if(sv){const[f,dir]=sv.split('-');const m=dir==='desc'?-1:1;d.sort((a,b)=>typeof a[f]==='number'?(a[f]-b[f])*m:String(a[f]).localeCompare(String(b[f]))*m);}
+    if(smCustSortField){const m=smCustSortDir==='desc'?-1:1;d.sort((a,b)=>{const va=a[smCustSortField],vb=b[smCustSortField];if(typeof va==='number')return(va-vb)*m;return String(va||'').localeCompare(String(vb||''))*m;});}
     return d;
 }
 function renderTable(){
@@ -394,6 +398,8 @@ function renderTable(){
         html+=`<tr class="group-subtotal-row"><td colspan="5">Subtotal — ${sanitize(k)}</td><td>${sCY.toLocaleString()}</td><td>${sLY.toLocaleString()}</td></tr>`;tCY+=sCY;tLY+=sLY;});
     }else{data.forEach(c=>{const cy=+c.actualCY||0,ly=+c.actualLY||0;tCY+=cy;tLY+=ly;html+=bRow(c,cy,ly);});}
     tbody.innerHTML=html;document.getElementById('totalACTCY').textContent=tCY.toLocaleString();document.getElementById('totalACTLY').textContent=tLY.toLocaleString();
+    // Update sort arrows
+    const table=document.getElementById('custTable');if(table)table.querySelectorAll('th.sortable').forEach(th=>{th.classList.remove('sort-asc','sort-desc');if(th.dataset.sort===smCustSortField)th.classList.add('sort-'+smCustSortDir);});
 }
 function bRow(c,cy,ly){return`<tr><td>${sanitize(c.customerCode)}</td><td class="customer-name">${sanitize(c.customer)}</td><td>${sanitize(c.brand)}</td><td>${sanitize(c.product)}</td><td>${sanitize(c.dayDate)}</td><td class="customer-sales">${cy.toLocaleString()}</td><td>${ly.toLocaleString()}</td></tr>`;}
 function populateFilters(){
@@ -605,7 +611,9 @@ function showDashboard(user,sr){
 }
 
 /* ══════════ EVENTS ══════════ */
-document.addEventListener('DOMContentLoaded',()=>{['customerSearch','filterBrand','filterCustomer','filterProduct','filterDate','groupBy','sortBy'].forEach(id=>{const el=document.getElementById(id);el.addEventListener(el.tagName==='INPUT'?'input':'change',renderTable);});});
+document.addEventListener('DOMContentLoaded',()=>{['customerSearch','filterBrand','filterCustomer','filterProduct','filterDate','groupBy'].forEach(id=>{const el=document.getElementById(id);el.addEventListener(el.tagName==='INPUT'?'input':'change',renderTable);});
+    document.querySelectorAll('th.sortable').forEach(th=>{th.addEventListener('click',function(){const f=this.dataset.sort;if(smCustSortField===f)smCustSortDir=smCustSortDir==='asc'?'desc':'asc';else{smCustSortField=f;smCustSortDir='asc';}renderTable();});});
+});
 
 window.onload=async function(){
     await loadData();
