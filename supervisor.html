@@ -189,9 +189,8 @@
 </div>
 
 <script>
-// ══ GOOGLE SHEETS CONFIG (data reading) ══
-const GOOGLE_SHEET_ID = '1fsAMrws9Of-XM69Q0IZY62SU8fYN2IL1g9vw58WquQI';
-const SHEET_TABS = { users:'Users', salesmanSales:'SalesmanSales', masterData:'MasterData' };
+// ══ GOOGLE APPS SCRIPT CONFIG (smart filtered API) ══
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxIrIwg_Lg7aaoaHzJZcA1VjagDF53RgZJt8Oe07NL7uwyiu7Z0p4C8Ycgu2ykhnmkW/exec';  // ← Paste your deployed Apps Script URL here
 // ══ POWER AUTOMATE CONFIG (surveys only) ══
 const POWER_AUTOMATE_GET_URL = 'https://default04af0493a5b44947ab72ae37fae884.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/a52eaf1a49894199856439aa7e837f82/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=TKq2xFQ8rgo4juZL9h8SoNrPOH-gEe24DIOd7Jsu0Qw';
 
@@ -199,21 +198,23 @@ let usersData=[],salesmanSalesData=[],masterData=[],currentUser=null,mySalesmen=
 let allSurveys=[];
 
 function sanitize(s){const d=document.createElement('div');d.textContent=String(s);return d.innerHTML;}
-
-async function fetchSheet(sheetId,tabName){if(!sheetId)return[];const url='https://docs.google.com/spreadsheets/d/'+sheetId+'/gviz/tq?tqx=out:json&sheet='+encodeURIComponent(tabName);try{const r=await fetch(url);if(!r.ok)return[];let t=await r.text();const s=t.indexOf('{'),e=t.lastIndexOf('}');if(s===-1||e===-1)return[];const j=JSON.parse(t.substring(s,e+1));if(!j.table||!j.table.cols||!j.table.rows)return[];const h=j.table.cols.map(c=>c.label||c.id||'');return j.table.rows.map(row=>{const o={};row.c.forEach((cell,i)=>{if(i<h.length&&h[i])o[h[i]]=cell?((cell.f!==undefined&&cell.f!==null)?cell.f:(cell.v!==undefined&&cell.v!==null?cell.v:'')):''});return o});}catch(e){console.error('Sheet error:',tabName,e);return[];}}
 function toNum(v){const n=Number(v);return isNaN(n)?0:n;}
 
+async function loadFromAppsScript(userCode){
+    if(!APPS_SCRIPT_URL)return false;
+    try{
+        const url=APPS_SCRIPT_URL+'?action=login&code='+encodeURIComponent(userCode);
+        const r=await fetch(url);if(!r.ok)return false;
+        const data=await r.json();if(data.error)return false;
+        if(data.user)usersData=[{userID:toNum(data.user.UserID),userName:data.user.UserName||'',role:data.user.Role||''}];
+        if(data.salesmanSales)salesmanSalesData=data.salesmanSales.map(r=>({salesmanCode:toNum(r.SalesmanCode),salesman:r.Salesman||'',routeCode:toNum(r.RouteCode),assignedSPV:toNum(r.AssignedSPV),target:toNum(r.Target),actualSales:toNum(r.ActualSales),targetPercent:toNum(r.TargetPercent)}));
+        if(data.masterData)masterData=data.masterData.map(r=>({salesmanCode:toNum(r.SalesmanCode),routeCode:toNum(r.RouteCode),assignedSPV:toNum(r.AssignedSPV),customerCode:String(r.CustomerCode||''),customer:r.Customer||'',brand:r.Brand||'',productGroup:r.ProductGroup||'',subBrand:r.SubBrand||'',product:r.Product||'',dayDate:String(r.DayDate||''),actualCY:toNum(r.ActualCY),actualLY:toNum(r.ActualLY)}));
+        console.log('Apps Script: loaded',salesmanSalesData.length,'salesmen,',masterData.length,'master rows');
+        return true;
+    }catch(e){console.error('Apps Script error:',e);return false;}
+}
+
 async function loadData(){
-    if(GOOGLE_SHEET_ID){
-        try{
-            const[uR,sR,mR]=await Promise.all([fetchSheet(GOOGLE_SHEET_ID,SHEET_TABS.users),fetchSheet(GOOGLE_SHEET_ID,SHEET_TABS.salesmanSales),fetchSheet(GOOGLE_SHEET_ID,SHEET_TABS.masterData)]);
-            if(uR.length){usersData=uR.map(r=>({userID:toNum(r.UserID),userName:r.UserName||'',role:r.Role||''}));}
-            if(sR.length){salesmanSalesData=sR.map(r=>({salesmanCode:toNum(r.SalesmanCode),salesman:r.Salesman||'',routeCode:toNum(r.RouteCode),assignedSPV:toNum(r.AssignedSPV),target:toNum(r.Target),actualSales:toNum(r.ActualSales),targetPercent:toNum(r.TargetPercent)}));}
-            if(mR.length){masterData=mR.map(r=>({salesmanCode:toNum(r.SalesmanCode),routeCode:toNum(r.RouteCode),assignedSPV:toNum(r.AssignedSPV),customerCode:r.CustomerCode||'',customer:r.Customer||'',brand:r.Brand||'',productGroup:r.ProductGroup||'',subBrand:r.SubBrand||'',product:r.Product||'',dayDate:r.DayDate||'',actualCY:toNum(r.ActualCY),actualLY:toNum(r.ActualLY)}));}
-            console.log('GSheets loaded:',usersData.length,'users,',salesmanSalesData.length,'sales,',masterData.length,'master');
-            if(usersData.length)return;
-        }catch(e){console.error('GSheets error:',e);}
-    }
     try{const[u,s,m]=await Promise.all([fetch('users_data.json'),fetch('salesman_sales.json'),fetch('master_data.json')]);
     usersData=await u.json();salesmanSalesData=await s.json();masterData=await m.json();}catch(e){console.error(e);
     usersData=[{"userID":75241,"userName":"Aseel","role":"Salesman"},{"userID":75242,"userName":"Ali","role":"Salesman"},{"userID":75243,"userName":"Ahmed","role":"Salesman"},{"userID":75244,"userName":"Amer","role":"Salesman"},{"userID":75245,"userName":"Amjad","role":"Salesman"},{"userID":12345,"userName":"Admin","role":"Management"},{"userID":123456,"userName":"SUP","role":"Supervisor"},{"userID":3001,"userName":"BSM","role":"BSM"}];
@@ -452,14 +453,19 @@ document.addEventListener('DOMContentLoaded',()=>{
 window.onload=async function(){
     await loadData();
     const s=sessionStorage.getItem('loggedInSupervisor');
-    if(s){const u=JSON.parse(s);const user=usersData.find(x=>x.userID==u.userID&&x.role==='Supervisor');
+    if(s){const u=JSON.parse(s);
+    if(APPS_SCRIPT_URL){await loadFromAppsScript(u.userID);}
+    const user=usersData.find(x=>x.userID==u.userID&&x.role==='Supervisor');
     if(user){currentUser=user;showDashboard(user);}else sessionStorage.removeItem('loggedInSupervisor');}
 };
 
-document.getElementById('loginForm').addEventListener('submit',function(e){
+document.getElementById('loginForm').addEventListener('submit',async function(e){
     e.preventDefault();
     const name=document.getElementById('userName').value.trim(),code=document.getElementById('userCode').value.trim();
+    const btn=this.querySelector('button[type="submit"]');btn.disabled=true;btn.textContent='Loading...';
+    if(APPS_SCRIPT_URL){await loadFromAppsScript(code);}
     const user=usersData.find(u=>u.userName.toLowerCase()===name.toLowerCase()&&String(u.userID)===code);
+    btn.disabled=false;btn.textContent='Log In';
     if(!user){showError('Invalid credentials.');return;}
     if(user.role!=='Supervisor'){showError('Access Denied: This page is for Supervisor role only.');return;}
     sessionStorage.setItem('loggedInSupervisor',JSON.stringify(user));currentUser=user;showDashboard(user);

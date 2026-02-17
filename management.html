@@ -580,16 +580,15 @@
             return div.innerHTML;
         }
 
-        const GOOGLE_SHEET_ID = '1fsAMrws9Of-XM69Q0IZY62SU8fYN2IL1g9vw58WquQI';
-        async function fetchSheet(sheetId,tabName){if(!sheetId)return[];const url='https://docs.google.com/spreadsheets/d/'+sheetId+'/gviz/tq?tqx=out:json&sheet='+encodeURIComponent(tabName);try{const r=await fetch(url);if(!r.ok)return[];let t=await r.text();const s=t.indexOf('{'),e=t.lastIndexOf('}');if(s===-1||e===-1)return[];const j=JSON.parse(t.substring(s,e+1));if(!j.table||!j.table.cols||!j.table.rows)return[];const h=j.table.cols.map(c=>c.label||c.id||'');return j.table.rows.map(row=>{const o={};row.c.forEach((cell,i)=>{if(i<h.length&&h[i])o[h[i]]=cell?((cell.f!==undefined&&cell.f!==null)?cell.f:(cell.v!==undefined&&cell.v!==null?cell.v:'')):''});return o});}catch(e){console.error('Sheet error:',tabName,e);return[];}}
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxIrIwg_Lg7aaoaHzJZcA1VjagDF53RgZJt8Oe07NL7uwyiu7Z0p4C8Ycgu2ykhnmkW/exec';
 
         // Load users data
         async function loadData() {
-            if(GOOGLE_SHEET_ID){
+            if(APPS_SCRIPT_URL){
                 try{
-                    const rows=await fetchSheet(GOOGLE_SHEET_ID,'Users');
-                    if(rows.length){usersData=rows.map(r=>({userID:Number(r.UserID)||0,userName:r.UserName||'',role:r.Role||''}));console.log('GSheets: loaded',usersData.length,'users');return;}
-                }catch(e){console.error('GSheets error:',e);}
+                    const r=await fetch(APPS_SCRIPT_URL+'?action=getUsers');
+                    if(r.ok){const data=await r.json();if(data.users&&data.users.length){usersData=data.users.map(r=>({userID:Number(r.UserID)||0,userName:r.UserName||'',role:r.Role||''}));console.log('Apps Script: loaded',usersData.length,'users');return;}}
+                }catch(e){console.error('Apps Script error:',e);}
             }
             try {
                 const usersResponse = await fetch('users_data.json');

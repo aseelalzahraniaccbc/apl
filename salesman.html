@@ -298,43 +298,39 @@ let surveys=[]; // in-memory survey storage
 let selectedPhotos=[];
 let selectedRating=0;
 
-// ══ GOOGLE SHEETS CONFIG (data reading) ══
-const GOOGLE_SHEET_ID = '1fsAMrws9Of-XM69Q0IZY62SU8fYN2IL1g9vw58WquQI';
-const SHEET_TABS = { users:'Users', salesmanSales:'SalesmanSales', masterData:'MasterData' };
+// ══ GOOGLE APPS SCRIPT CONFIG (smart filtered API) ══
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxIrIwg_Lg7aaoaHzJZcA1VjagDF53RgZJt8Oe07NL7uwyiu7Z0p4C8Ycgu2ykhnmkW/exec';  // ← Paste your deployed Apps Script URL here
 
 // ══ POWER AUTOMATE CONFIG (surveys only) ══
 const POWER_AUTOMATE_URL = 'https://default04af0493a5b44947ab72ae37fae884.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/6018be027d0d496e9c5fa667370d2dff/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=ajBhz97SiJp_mX8pPijjTLOPjVEzGZHsvRJQXTyrpLU';
 const POWER_AUTOMATE_GET_URL = 'https://default04af0493a5b44947ab72ae37fae884.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/a52eaf1a49894199856439aa7e837f82/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=TKq2xFQ8rgo4juZL9h8SoNrPOH-gEe24DIOd7Jsu0Qw';
 
-// ══ GOOGLE SHEETS JSON READER (robust — no CSV parsing issues) ══
-async function fetchSheet(sheetId, tabName){
-    if(!sheetId)return[];
-    const url='https://docs.google.com/spreadsheets/d/'+sheetId+'/gviz/tq?tqx=out:json&sheet='+encodeURIComponent(tabName);
-    try{
-        const r=await fetch(url);
-        if(!r.ok){console.error('Sheet fetch failed:',tabName,r.status);return[];}
-        let text=await r.text();
-        // Google returns: /*O_o*/\ngoogle.visualization.Query.setResponse({...});
-        // Strip the wrapper to get pure JSON
-        const start=text.indexOf('{');
-        const end=text.lastIndexOf('}');
-        if(start===-1||end===-1){console.error('Bad GSheet response for',tabName);return[];}
-        const json=JSON.parse(text.substring(start,end+1));
-        if(!json.table||!json.table.cols||!json.table.rows)return[];
-        // Convert to array of objects with header names as keys
-        const headers=json.table.cols.map(c=>c.label||c.id||'');
-        return json.table.rows.map(row=>{
-            const obj={};
-            row.c.forEach((cell,i)=>{
-                if(i<headers.length&&headers[i]){
-                    obj[headers[i]]=cell?((cell.f!==undefined&&cell.f!==null)?cell.f:(cell.v!==undefined&&cell.v!==null?cell.v:'')):'';}
-            });
-            return obj;
-        });
-    }catch(e){console.error('Sheet error:',tabName,e);return[];}
-}
-
+// ══ FETCH FROM APPS SCRIPT (returns only this user's data) ══
 function toNum(v){const n=Number(v);return isNaN(n)?0:n;}
+
+async function loadFromAppsScript(userCode){
+    if(!APPS_SCRIPT_URL)return false;
+    try{
+        console.log('Loading from Apps Script for code:',userCode);
+        const url=APPS_SCRIPT_URL+'?action=login&code='+encodeURIComponent(userCode);
+        const r=await fetch(url);
+        if(!r.ok){console.error('Apps Script error:',r.status);return false;}
+        const data=await r.json();
+        if(data.error){console.error('Apps Script:',data.error);return false;}
+        console.log('Apps Script returned:',Object.keys(data));
+        if(data.user){
+            usersData=[{userID:toNum(data.user.UserID),userName:data.user.UserName||'',role:data.user.Role||''}];
+        }
+        if(data.salesmanSales&&data.salesmanSales.length){
+            salesmanSalesData=data.salesmanSales.map(r=>({salesmanCode:toNum(r.SalesmanCode),salesman:r.Salesman||'',routeCode:toNum(r.RouteCode),assignedSPV:toNum(r.AssignedSPV),target:toNum(r.Target),actualSales:toNum(r.ActualSales),targetPercent:toNum(r.TargetPercent)}));
+        }
+        if(data.masterData&&data.masterData.length){
+            masterData=data.masterData.map(r=>({salesmanCode:toNum(r.SalesmanCode),routeCode:toNum(r.RouteCode),assignedSPV:toNum(r.AssignedSPV),customerCode:String(r.CustomerCode||''),customer:r.Customer||'',brand:r.Brand||'',productGroup:r.ProductGroup||'',subBrand:r.SubBrand||'',product:r.Product||'',dayDate:String(r.DayDate||''),actualCY:toNum(r.ActualCY),actualLY:toNum(r.ActualLY)}));
+            console.log('Loaded',masterData.length,'master rows (filtered for this user only)');
+        }
+        return true;
+    }catch(e){console.error('Apps Script error:',e);return false;}
+}
 
 async function loadSurveys(salesmanCode){
     if(!POWER_AUTOMATE_GET_URL)return;
@@ -366,30 +362,12 @@ async function loadSurveys(salesmanCode){
 }
 
 function parseExcelDate(val){if(!val)return'';const n=Number(val);if(!isNaN(n)&&n>40000){return new Date((n-25569)*86400000).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});}return String(val);}
-function parseExcelTime(val){if(!val)return'';const n=Number(val);if(!isNaN(n)&&n>=0&&n<1){const t=Math.round(n*24*60);return String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0');}if(!isNaN(n)&&n>40000){const f=n-Math.floor(n);const t=Math.round(f*24*60);return String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0');}return String(val);}
+function parseExcelTime(val){if(!val)return'';const n=Number(val);if(!isNaN(n)&&n>=0&&n<1){const t=Math.round(n*24*60);return String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0');}return String(val);}
 
 function sanitize(s){const d=document.createElement('div');d.textContent=String(s);return d.innerHTML;}
 
 async function loadData(){
-    // Try Google Sheets first
-    if(GOOGLE_SHEET_ID){
-        try{
-            console.log('Loading from Google Sheets...');
-            const[uRows,sRows,mRows]=await Promise.all([
-                fetchSheet(GOOGLE_SHEET_ID,SHEET_TABS.users),
-                fetchSheet(GOOGLE_SHEET_ID,SHEET_TABS.salesmanSales),
-                fetchSheet(GOOGLE_SHEET_ID,SHEET_TABS.masterData)
-            ]);
-            console.log('GSheets raw:',uRows.length,'users,',sRows.length,'sales,',mRows.length,'master');
-            if(uRows.length>0)console.log('User sample:',JSON.stringify(uRows[0]));
-            if(uRows.length){usersData=uRows.map(r=>({userID:toNum(r.UserID),userName:r.UserName||'',role:r.Role||''}));}
-            if(sRows.length){salesmanSalesData=sRows.map(r=>({salesmanCode:toNum(r.SalesmanCode),salesman:r.Salesman||'',routeCode:toNum(r.RouteCode),assignedSPV:toNum(r.AssignedSPV),target:toNum(r.Target),actualSales:toNum(r.ActualSales),targetPercent:toNum(r.TargetPercent)}));}
-            if(mRows.length){masterData=mRows.map(r=>({salesmanCode:toNum(r.SalesmanCode),routeCode:toNum(r.RouteCode),assignedSPV:toNum(r.AssignedSPV),customerCode:r.CustomerCode||'',customer:r.Customer||'',brand:r.Brand||'',productGroup:r.ProductGroup||'',subBrand:r.SubBrand||'',product:r.Product||'',dayDate:r.DayDate||'',actualCY:toNum(r.ActualCY),actualLY:toNum(r.ActualLY)}));}
-            console.log('Loaded from GSheets:',usersData.length,'users,',salesmanSalesData.length,'sales,',masterData.length,'master');
-            if(usersData.length)return;
-        }catch(e){console.error('Google Sheets error:',e);}
-    }
-    // Fallback to JSON
+    // Fallback: load from JSON files (used when Apps Script not configured)
     try{const[u,s,m]=await Promise.all([fetch('users_data.json'),fetch('salesman_sales.json'),fetch('master_data.json')]);usersData=await u.json();salesmanSalesData=await s.json();masterData=await m.json();}catch(e){console.error(e);
     usersData=[{"userID":75241,"userName":"Aseel","role":"Salesman"},{"userID":75242,"userName":"Ali","role":"Salesman"},{"userID":75243,"userName":"Ahmed","role":"Salesman"},{"userID":75244,"userName":"Amer","role":"Salesman"},{"userID":75245,"userName":"Amjad","role":"Salesman"},{"userID":12345,"userName":"Admin","role":"Management"},{"userID":123456,"userName":"SUP","role":"Supervisor"},{"userID":3001,"userName":"BSM","role":"BSM"}];
     salesmanSalesData=[{"salesmanCode":75241,"salesman":"Aseel","routeCode":1,"assignedSPV":123456,"target":3000,"actualSales":2700,"targetPercent":90},{"salesmanCode":75242,"salesman":"Ali","routeCode":2,"assignedSPV":123456,"target":3200,"actualSales":3000,"targetPercent":93.75},{"salesmanCode":75243,"salesman":"Ahmed","routeCode":3,"assignedSPV":123456,"target":3100,"actualSales":2800,"targetPercent":90.32},{"salesmanCode":75244,"salesman":"Amer","routeCode":4,"assignedSPV":123456,"target":3500,"actualSales":2700,"targetPercent":77.14},{"salesmanCode":75245,"salesman":"Amjad","routeCode":5,"assignedSPV":123456,"target":3300,"actualSales":2900,"targetPercent":87.88}];
@@ -629,10 +607,26 @@ function showDashboard(user,sr){
 /* ══════════ EVENTS ══════════ */
 document.addEventListener('DOMContentLoaded',()=>{['customerSearch','filterBrand','filterCustomer','filterProduct','filterDate','groupBy','sortBy'].forEach(id=>{const el=document.getElementById(id);el.addEventListener(el.tagName==='INPUT'?'input':'change',renderTable);});});
 
-window.onload=async function(){await loadData();const s=sessionStorage.getItem('loggedInSalesman');if(s){const u=JSON.parse(s);const user=usersData.find(x=>x.userID==u.userID&&x.role==='Salesman');if(user){const sr=salesmanSalesData.find(x=>x.salesmanCode==user.userID);if(sr){currentUser=user;showDashboard(user,sr);}}else sessionStorage.removeItem('loggedInSalesman');}};
+window.onload=async function(){
+    await loadData(); // loads JSON fallback data
+    const s=sessionStorage.getItem('loggedInSalesman');
+    if(s){
+        const u=JSON.parse(s);
+        // If Apps Script configured, reload fresh data for this user
+        if(APPS_SCRIPT_URL){await loadFromAppsScript(u.userID);}
+        const user=usersData.find(x=>x.userID==u.userID&&x.role==='Salesman');
+        if(user){const sr=salesmanSalesData.find(x=>x.salesmanCode==user.userID);if(sr){currentUser=user;showDashboard(user,sr);}}
+        else sessionStorage.removeItem('loggedInSalesman');
+    }
+};
 
-document.getElementById('loginForm').addEventListener('submit',function(e){e.preventDefault();const name=document.getElementById('userName').value.trim(),code=document.getElementById('userCode').value.trim();
+document.getElementById('loginForm').addEventListener('submit',async function(e){e.preventDefault();
+    const name=document.getElementById('userName').value.trim(),code=document.getElementById('userCode').value.trim();
+    const btn=this.querySelector('button[type="submit"]');btn.disabled=true;btn.textContent='Loading...';
+    // If Apps Script configured, fetch this user's data on login
+    if(APPS_SCRIPT_URL){await loadFromAppsScript(code);}
     const user=usersData.find(u=>u.userName.toLowerCase()===name.toLowerCase()&&String(u.userID)===code);
+    btn.disabled=false;btn.textContent='Log In';
     if(!user){showError('Invalid credentials.');return;}if(user.role!=='Salesman'){showError('Access Denied: This page is for Salesman role only.');return;}
     const sr=salesmanSalesData.find(s=>s.salesmanCode==user.userID);if(!sr){showError('No sales data found.');return;}
     sessionStorage.setItem('loggedInSalesman',JSON.stringify(user));currentUser=user;showDashboard(user,sr);});
