@@ -321,15 +321,18 @@ document.addEventListener('DOMContentLoaded',()=>{
     document.getElementById('smFiltSPV').addEventListener('change',renderSMTable);
 });
 
-window.onload=async function(){await loadData();const s=sessionStorage.getItem('loggedInBSM');if(s){const u=JSON.parse(s);if(APPS_SCRIPT_URL){await loadFromAppsScript(u.userID);}const user=usersData.find(x=>x.userID==u.userID&&x.role==='BSM');if(user){currentUser=user;showDashboard(user);}else sessionStorage.removeItem('loggedInBSM');}};
+window.onload=async function(){await loadData();const s=sessionStorage.getItem('loggedInBSM');if(s){const u=JSON.parse(s);
+    if(APPS_SCRIPT_URL){const ok=await loadFromAppsScript(u.userID);if(!ok){sessionStorage.removeItem('loggedInBSM');return;}}
+    const user=usersData.find(x=>x.userID==u.userID&&x.role==='BSM');if(user){currentUser=user;showDashboard(user);}else sessionStorage.removeItem('loggedInBSM');}};
 
 document.getElementById('loginForm').addEventListener('submit',async function(e){e.preventDefault();
     const name=document.getElementById('userName').value.trim(),code=document.getElementById('userCode').value.trim();
+    if(!name||!code){showError('Please enter both User Name and User ID.');return;}
     const btn=this.querySelector('button[type="submit"]');btn.disabled=true;btn.textContent='Loading...';
     if(APPS_SCRIPT_URL){await loadFromAppsScript(code);}
     const user=usersData.find(u=>u.userName.toLowerCase()===name.toLowerCase()&&String(u.userID)===code);
     btn.disabled=false;btn.textContent='Log In';
-    if(!user){showError('Invalid credentials.');return;}if(user.role!=='BSM'){showError('Access Denied: This page is for BSM role only.');return;}
+    if(!user){showError('Invalid credentials. Check your User Name and User ID.');return;}if(user.role!=='BSM'){showError('Access Denied: This page is for BSM role only.');return;}
     sessionStorage.setItem('loggedInBSM',JSON.stringify(user));currentUser=user;showDashboard(user);});
 
 function showError(m){const e=document.getElementById('errorMessage');e.textContent=m;e.style.display='block';setTimeout(()=>e.style.display='none',3000);}

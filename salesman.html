@@ -299,7 +299,7 @@ let selectedPhotos=[];
 let selectedRating=0;
 
 // ══ GOOGLE APPS SCRIPT CONFIG (smart filtered API) ══
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxIrIwg_Lg7aaoaHzJZcA1VjagDF53RgZJt8Oe07NL7uwyiu7Z0p4C8Ycgu2ykhnmkW/exec';  // ← Paste your deployed Apps Script URL here
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxIrIwg_Lg7aaoaHzJZcA1VjagDF53RgZJt8Oe07NL7uwyiu7Z0p4C8Ycgu2ykhnmkW/exec';
 
 // ══ POWER AUTOMATE CONFIG (surveys only) ══
 const POWER_AUTOMATE_URL = 'https://default04af0493a5b44947ab72ae37fae884.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/6018be027d0d496e9c5fa667370d2dff/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=ajBhz97SiJp_mX8pPijjTLOPjVEzGZHsvRJQXTyrpLU';
@@ -361,8 +361,8 @@ async function loadSurveys(salesmanCode){
     updateSurveyBadge();
 }
 
-function parseExcelDate(val){if(!val)return'';const n=Number(val);if(!isNaN(n)&&n>40000){return new Date((n-25569)*86400000).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});}return String(val);}
-function parseExcelTime(val){if(!val)return'';const n=Number(val);if(!isNaN(n)&&n>=0&&n<1){const t=Math.round(n*24*60);return String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0');}return String(val);}
+function parseExcelDate(val){if(!val)return'';const s=String(val).trim();if(s.match(/[a-zA-Z]/)||s.match(/^\d{4}-\d{2}-\d{2}/))return s.replace(/ 00:00:00$/,'');const n=Number(s);if(!isNaN(n)&&n>30000&&n<100000){return new Date((n-25569)*86400000).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});}return s;}
+function parseExcelTime(val){if(!val)return'';const s=String(val).trim();if(s.match(/^\d{1,2}:\d{2}/))return s.replace(/:00$/,'');const n=Number(s);if(!isNaN(n)&&n>=0&&n<1){const t=Math.round(n*24*60);return String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0');}if(!isNaN(n)&&n>30000){const f=n-Math.floor(n);if(f>0){const t=Math.round(f*24*60);return String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0');}}return s;}
 
 function sanitize(s){const d=document.createElement('div');d.textContent=String(s);return d.innerHTML;}
 
@@ -608,12 +608,14 @@ function showDashboard(user,sr){
 document.addEventListener('DOMContentLoaded',()=>{['customerSearch','filterBrand','filterCustomer','filterProduct','filterDate','groupBy','sortBy'].forEach(id=>{const el=document.getElementById(id);el.addEventListener(el.tagName==='INPUT'?'input':'change',renderTable);});});
 
 window.onload=async function(){
-    await loadData(); // loads JSON fallback data
+    await loadData();
     const s=sessionStorage.getItem('loggedInSalesman');
     if(s){
         const u=JSON.parse(s);
-        // If Apps Script configured, reload fresh data for this user
-        if(APPS_SCRIPT_URL){await loadFromAppsScript(u.userID);}
+        if(APPS_SCRIPT_URL){
+            const ok=await loadFromAppsScript(u.userID);
+            if(!ok){sessionStorage.removeItem('loggedInSalesman');return;}
+        }
         const user=usersData.find(x=>x.userID==u.userID&&x.role==='Salesman');
         if(user){const sr=salesmanSalesData.find(x=>x.salesmanCode==user.userID);if(sr){currentUser=user;showDashboard(user,sr);}}
         else sessionStorage.removeItem('loggedInSalesman');
@@ -622,12 +624,12 @@ window.onload=async function(){
 
 document.getElementById('loginForm').addEventListener('submit',async function(e){e.preventDefault();
     const name=document.getElementById('userName').value.trim(),code=document.getElementById('userCode').value.trim();
+    if(!name||!code){showError('Please enter both User Name and User ID.');return;}
     const btn=this.querySelector('button[type="submit"]');btn.disabled=true;btn.textContent='Loading...';
-    // If Apps Script configured, fetch this user's data on login
     if(APPS_SCRIPT_URL){await loadFromAppsScript(code);}
     const user=usersData.find(u=>u.userName.toLowerCase()===name.toLowerCase()&&String(u.userID)===code);
     btn.disabled=false;btn.textContent='Log In';
-    if(!user){showError('Invalid credentials.');return;}if(user.role!=='Salesman'){showError('Access Denied: This page is for Salesman role only.');return;}
+    if(!user){showError('Invalid credentials. Check your User Name and User ID.');return;}if(user.role!=='Salesman'){showError('Access Denied: This page is for Salesman role only.');return;}
     const sr=salesmanSalesData.find(s=>s.salesmanCode==user.userID);if(!sr){showError('No sales data found.');return;}
     sessionStorage.setItem('loggedInSalesman',JSON.stringify(user));currentUser=user;showDashboard(user,sr);});
 

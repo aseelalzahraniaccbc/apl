@@ -93,6 +93,12 @@
         .mini-progress-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg,#43e97b,#38f9d7); }
 
         @media(max-width:768px){ .dashboard-header{flex-direction:column;gap:20px;text-align:center} .summary-grid{grid-template-columns:1fr 1fr} .toolbar{flex-direction:column;align-items:stretch} .toolbar input[type="text"]{min-width:auto;width:100%} .tab-btn{font-size:.9em;padding:15px 10px} }
+        .cust-summary-row{cursor:pointer;transition:background 0.15s;}
+        .cust-summary-row:hover{background:#e8f5e9 !important;}
+        .cust-summary-row td:first-child{text-align:center;font-size:0.85em;color:#888;}
+        .var-positive{color:#2e7d32;font-weight:600;}
+        .var-negative{color:#c62828;font-weight:600;}
+        .product-count-badge{background:#e8f5e9;color:#2e7d32;padding:2px 8px;border-radius:10px;font-size:0.85em;font-weight:600;}
     </style>
 </head>
 <body>
@@ -157,15 +163,12 @@
                     <div class="toolbar-group"><label>Salesman:</label><select id="filtSalesman"><option value="">All</option></select></div>
                     <div class="toolbar-group"><label>Brand:</label><select id="filtBrand"><option value="">All</option></select></div>
                     <div class="toolbar-group"><label>Customer:</label><select id="filtCustomer"><option value="">All</option></select></div>
-                    <div class="toolbar-group"><label>Product:</label><select id="filtProduct"><option value="">All</option></select></div>
-                    <div class="toolbar-group"><label>Date:</label><select id="filtDate"><option value="">All</option></select></div>
-                    <div class="toolbar-group"><label>Group By:</label><select id="custGroupBy"><option value="">None</option><option value="salesman">Salesman</option><option value="brand">Brand</option><option value="customer">Customer</option><option value="product">Product</option><option value="dayDate">Date</option></select></div>
-                    <div class="toolbar-group"><label>Sort:</label><select id="custSortBy"><option value="">Default</option><option value="customer-asc">Customer ↑</option><option value="customer-desc">Customer ↓</option><option value="brand-asc">Brand ↑</option><option value="brand-desc">Brand ↓</option><option value="actualCY-asc">ACT-CY ↑</option><option value="actualCY-desc">ACT-CY ↓</option><option value="dayDate-asc">Date ↑</option><option value="dayDate-desc">Date ↓</option></select></div>
+                    <div class="toolbar-group"><label>Sort:</label><select id="custSortBy"><option value="">Default</option><option value="customer-asc">Customer ↑</option><option value="customer-desc">Customer ↓</option><option value="totalCY-desc">ACT-CY ↓</option><option value="totalCY-asc">ACT-CY ↑</option><option value="totalLY-desc">ACT-LY ↓</option><option value="totalLY-asc">ACT-LY ↑</option></select></div>
                 </div>
                 <table class="data-table">
-                    <thead><tr><th>Salesman</th><th>Route</th><th>Code</th><th>Customer</th><th>Brand</th><th>Product</th><th>Date</th><th>ACT-CY</th><th>ACT-LY</th></tr></thead>
+                    <thead><tr><th style="width:30px"></th><th>Code</th><th>Customer</th><th>Salesman</th><th>Route</th><th>Products</th><th>ACT-CY</th><th>ACT-LY</th><th>Var %</th></tr></thead>
                     <tbody id="custTableBody"><tr><td colspan="9" class="no-data">Loading…</td></tr></tbody>
-                    <tfoot><tr class="total-row"><td colspan="7">Total</td><td class="sales-val"><span id="custTotalCY">0</span></td><td class="sales-val"><span id="custTotalLY">0</span></td></tr></tfoot>
+                    <tfoot><tr class="total-row"><td colspan="6">Total</td><td class="sales-val"><span id="custTotalCY">0</span></td><td class="sales-val"><span id="custTotalLY">0</span></td><td></td></tr></tfoot>
                 </table>
             </div>
         </div>
@@ -190,7 +193,7 @@
 
 <script>
 // ══ GOOGLE APPS SCRIPT CONFIG (smart filtered API) ══
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxIrIwg_Lg7aaoaHzJZcA1VjagDF53RgZJt8Oe07NL7uwyiu7Z0p4C8Ycgu2ykhnmkW/exec';  // ← Paste your deployed Apps Script URL here
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxIrIwg_Lg7aaoaHzJZcA1VjagDF53RgZJt8Oe07NL7uwyiu7Z0p4C8Ycgu2ykhnmkW/exec';
 // ══ POWER AUTOMATE CONFIG (surveys only) ══
 const POWER_AUTOMATE_GET_URL = 'https://default04af0493a5b44947ab72ae37fae884.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/a52eaf1a49894199856439aa7e837f82/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=TKq2xFQ8rgo4juZL9h8SoNrPOH-gEe24DIOd7Jsu0Qw';
 
@@ -255,57 +258,65 @@ function renderSalesmenTable(){
     document.getElementById('smTotalRem').textContent=(tTgt-tAct>0?(tTgt-tAct).toLocaleString():'—');
 }
 
-/* ══ TAB 2: CUSTOMERS TABLE ══ */
-function getCustFiltered(){
-    const q=document.getElementById('custSearch').value.toLowerCase();
-    const fS=document.getElementById('filtSalesman').value,fB=document.getElementById('filtBrand').value,fC=document.getElementById('filtCustomer').value,fP=document.getElementById('filtProduct').value,fD=document.getElementById('filtDate').value;
+/* ══ TAB 2: CUSTOMERS TABLE (Summary → Click to Detail Page) ══ */
+function getCustomerSummaries(){
     let d=[...myMasterData];
+    const q=document.getElementById('custSearch').value.toLowerCase();
+    const fS=document.getElementById('filtSalesman').value;
+    const fB=document.getElementById('filtBrand').value;
+    const fC=document.getElementById('filtCustomer').value;
     if(fS)d=d.filter(r=>String(r.salesmanCode)===fS);
-    if(fB)d=d.filter(r=>r.brand===fB);if(fC)d=d.filter(r=>r.customer===fC);if(fP)d=d.filter(r=>r.product===fP);if(fD)d=d.filter(r=>r.dayDate===fD);
-    if(q)d=d.filter(r=>[r.customerCode,r.customer,r.brand,r.product,r.dayDate,String(r.salesmanCode)].some(v=>String(v).toLowerCase().includes(q)));
+    if(fB)d=d.filter(r=>r.brand===fB);
+    if(fC)d=d.filter(r=>r.customer===fC);
+    if(q)d=d.filter(r=>[r.customerCode,r.customer,r.brand,r.product,String(r.salesmanCode)].some(v=>String(v).toLowerCase().includes(q)));
+    const map={};
+    d.forEach(r=>{
+        const key=r.customerCode;
+        if(!map[key]){const sm=mySalesmen.find(s=>s.salesmanCode==r.salesmanCode);map[key]={code:key,name:r.customer,salesman:sm?sm.salesman:String(r.salesmanCode),routeCode:r.routeCode,salesmanCode:r.salesmanCode,totalCY:0,totalLY:0,products:0,rows:[]};}
+        map[key].totalCY+=(+r.actualCY||0);map[key].totalLY+=(+r.actualLY||0);map[key].rows.push(r);
+    });
+    Object.values(map).forEach(c=>{c.products=[...new Set(c.rows.map(r=>r.product))].length;});
+    let summaries=Object.values(map);
     const sv=document.getElementById('custSortBy').value;
     if(sv){const[f,dir]=sv.split('-');const m=dir==='desc'?-1:1;
-        const field=f==='customer'?'customer':f;
-        d.sort((a,b)=>typeof a[field]==='number'?(a[field]-b[field])*m:String(a[field]).localeCompare(String(b[field]))*m);}
-    return d;
+        summaries.sort((a,b)=>{if(f==='totalCY')return(a.totalCY-b.totalCY)*m;if(f==='totalLY')return(a.totalLY-b.totalLY)*m;if(f==='customer')return a.name.localeCompare(b.name)*m;return 0;});
+    }else{summaries.sort((a,b)=>a.name.localeCompare(b.name));}
+    return summaries;
+}
+
+function openCustomerDetail(code){
+    const summaries=getCustomerSummaries();
+    const cust=summaries.find(c=>c.code===code);if(!cust)return;
+    sessionStorage.setItem('customerDetailInfo',JSON.stringify({
+        customerCode:cust.code,customerName:cust.name,salesman:cust.salesman,salesmanCode:cust.salesmanCode,routeCode:cust.routeCode,spvName:currentUser.userName,spvCode:currentUser.userID,rows:cust.rows
+    }));
+    window.open('customer_detail.html','_blank');
 }
 
 function renderCustTable(){
-    const data=getCustFiltered(),g=document.getElementById('custGroupBy').value,tbody=document.getElementById('custTableBody');
-    if(!data.length){tbody.innerHTML='<tr><td colspan="9" class="no-data">No data found</td></tr>';document.getElementById('custTotalCY').textContent='0';document.getElementById('custTotalLY').textContent='0';return;}
+    const summaries=getCustomerSummaries();
+    const tbody=document.getElementById('custTableBody');
+    if(!summaries.length){tbody.innerHTML='<tr><td colspan="9" class="no-data">No data found</td></tr>';document.getElementById('custTotalCY').textContent='0';document.getElementById('custTotalLY').textContent='0';return;}
     let html='',tCY=0,tLY=0;
-
-    const getGroupVal=(r,field)=>{
-        if(field==='salesman'){const sm=mySalesmen.find(s=>s.salesmanCode==r.salesmanCode);return sm?sm.salesman:String(r.salesmanCode);}
-        return r[field];
-    };
-
-    if(g){
-        const groups={};data.forEach(r=>{const k=getGroupVal(r,g);if(!groups[k])groups[k]=[];groups[k].push(r);});
-        Object.keys(groups).sort().forEach(k=>{const rows=groups[k];let sCY=0,sLY=0;
-            const label=g==='dayDate'?'Date':g==='salesman'?'Salesman':g.charAt(0).toUpperCase()+g.slice(1);
-            html+=`<tr class="group-header-row"><td colspan="9">${sanitize(label)}: ${sanitize(k)} (${rows.length})</td></tr>`;
-            rows.forEach(c=>{const cy=+c.actualCY||0,ly=+c.actualLY||0;sCY+=cy;sLY+=ly;html+=cRow(c,cy,ly);});
-            html+=`<tr class="group-subtotal-row"><td colspan="7">Subtotal — ${sanitize(k)}</td><td>${sCY.toLocaleString()}</td><td>${sLY.toLocaleString()}</td></tr>`;
-            tCY+=sCY;tLY+=sLY;});
-    }else{data.forEach(c=>{const cy=+c.actualCY||0,ly=+c.actualLY||0;tCY+=cy;tLY+=ly;html+=cRow(c,cy,ly);});}
+    summaries.forEach(c=>{
+        tCY+=c.totalCY;tLY+=c.totalLY;
+        const varPct=c.totalLY?(((c.totalCY-c.totalLY)/c.totalLY)*100):0;
+        const varCls=varPct>=0?'var-positive':'var-negative';
+        const varStr=(varPct>=0?'+':'')+varPct.toFixed(1)+'%';
+        html+=`<tr class="cust-summary-row" onclick="openCustomerDetail('${sanitize(c.code)}')">
+            <td>🔗</td><td style="font-weight:600">${sanitize(c.code)}</td><td style="font-weight:600;color:#333">${sanitize(c.name)}</td>
+            <td>${sanitize(c.salesman)}</td><td>${sanitize(c.routeCode)}</td><td><span class="product-count-badge">${c.products}</span></td>
+            <td class="sales-val">${c.totalCY.toLocaleString()}</td><td>${c.totalLY.toLocaleString()}</td><td><span class="${varCls}">${varStr}</span></td></tr>`;
+    });
     tbody.innerHTML=html;document.getElementById('custTotalCY').textContent=tCY.toLocaleString();document.getElementById('custTotalLY').textContent=tLY.toLocaleString();
-}
-
-function cRow(c,cy,ly){
-    const sm=mySalesmen.find(s=>s.salesmanCode==c.salesmanCode);const smName=sm?sm.salesman:c.salesmanCode;
-    return`<tr><td style="font-weight:500">${sanitize(smName)}</td><td>${sanitize(c.routeCode)}</td><td>${sanitize(c.customerCode)}</td><td style="font-weight:500;color:#333">${sanitize(c.customer)}</td><td>${sanitize(c.brand)}</td><td>${sanitize(c.product)}</td><td>${sanitize(c.dayDate)}</td><td class="sales-val">${cy.toLocaleString()}</td><td>${ly.toLocaleString()}</td></tr>`;
 }
 
 function populateCustFilters(){
     const fill=(id,vals,lbl)=>{const s=document.getElementById(id);s.innerHTML=`<option value="">All ${lbl}</option>`;vals.forEach(v=>{s.innerHTML+=`<option value="${sanitize(v[0])}">${sanitize(v[1])}</option>`;});};
-    // Salesman filter shows name but filters by code
     const smOpts=mySalesmen.map(s=>[String(s.salesmanCode), `${s.salesman} (${s.salesmanCode})`]);
     fill('filtSalesman',smOpts,'Salesmen');
     fill('filtBrand',[...new Set(myMasterData.map(r=>r.brand))].sort().map(v=>[v,v]),'Brands');
     fill('filtCustomer',[...new Set(myMasterData.map(r=>r.customer))].sort().map(v=>[v,v]),'Customers');
-    fill('filtProduct',[...new Set(myMasterData.map(r=>r.product))].sort().map(v=>[v,v]),'Products');
-    fill('filtDate',[...new Set(myMasterData.map(r=>r.dayDate))].sort().map(v=>[v,v]),'Dates');
 }
 
 /* ══ TAB 3: SURVEYS ══ */
@@ -314,7 +325,10 @@ async function loadAllSurveys(){
     try{
         document.getElementById('surveyTableContainer').innerHTML='<p class="survey-loading">Loading surveys...</p>';
         const smCodes=mySalesmen.map(s=>String(s.salesmanCode));
-        console.log('Supervisor loading surveys for salesmen:',smCodes);
+        // Include supervisor's own code so surveys created by supervisor are included
+        const spvCode=String(currentUser.userID);
+        if(!smCodes.includes(spvCode))smCodes.push(spvCode);
+        console.log('Loading surveys for codes:',smCodes);
         const sep=POWER_AUTOMATE_GET_URL.includes('?')?'&':'?';
         const r=await fetch(POWER_AUTOMATE_GET_URL+sep+'t='+Date.now(),{mode:'cors'});
         if(r.ok){
@@ -348,31 +362,38 @@ async function loadAllSurveys(){
 
 function parseExcelDate(val){
     if(!val)return'';
-    const n=Number(val);
-    if(!isNaN(n)&&n>40000){
+    const s=String(val).trim();
+    // Already formatted date string (e.g. "07 Feb 2026" or "2026-02-07")
+    if(s.match(/[a-zA-Z]/)|| s.match(/^\d{4}-\d{2}-\d{2}/))return s.replace(/ 00:00:00$/,'');
+    const n=Number(s);
+    if(!isNaN(n)&&n>30000&&n<100000){
+        // Excel serial number
         const d=new Date((n-25569)*86400000);
         return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
     }
-    return String(val);
+    return s;
 }
 
 function parseExcelTime(val){
     if(!val)return'';
-    const n=Number(val);
+    const s=String(val).trim();
+    // Already formatted time (e.g. "10:32" or "10:32:00")
+    if(s.match(/^\d{1,2}:\d{2}/))return s.replace(/:00$/,'');
+    const n=Number(s);
+    // Fractional day (0.0 - 0.9999)
     if(!isNaN(n)&&n>=0&&n<1){
         const totalMins=Math.round(n*24*60);
-        const h=Math.floor(totalMins/60);
-        const m=totalMins%60;
-        return(h<10?'0':'')+h+':'+(m<10?'0':'')+m;
+        return String(Math.floor(totalMins/60)).padStart(2,'0')+':'+String(totalMins%60).padStart(2,'0');
     }
-    if(!isNaN(n)&&n>40000){
+    // Excel datetime serial (e.g. 46069.438) — extract time fraction
+    if(!isNaN(n)&&n>30000){
         const frac=n-Math.floor(n);
-        const totalMins=Math.round(frac*24*60);
-        const h=Math.floor(totalMins/60);
-        const m=totalMins%60;
-        return(h<10?'0':'')+h+':'+(m<10?'0':'')+m;
+        if(frac>0){
+            const totalMins=Math.round(frac*24*60);
+            return String(Math.floor(totalMins/60)).padStart(2,'0')+':'+String(totalMins%60).padStart(2,'0');
+        }
     }
-    return String(val);
+    return s;
 }
 
 function populateSurveyFilters(){
@@ -442,7 +463,7 @@ function showDashboard(user){
 
 /* ══ EVENTS ══ */
 document.addEventListener('DOMContentLoaded',()=>{
-    ['custSearch','filtSalesman','filtBrand','filtCustomer','filtProduct','filtDate','custGroupBy','custSortBy'].forEach(id=>{
+    ['custSearch','filtSalesman','filtBrand','filtCustomer','custSortBy'].forEach(id=>{
         const el=document.getElementById(id);el.addEventListener(el.tagName==='INPUT'?'input':'change',renderCustTable);
     });
     ['surveySearch','survFiltSM','survFiltCust','survFiltRating','survSortBy'].forEach(id=>{
@@ -453,20 +474,41 @@ document.addEventListener('DOMContentLoaded',()=>{
 window.onload=async function(){
     await loadData();
     const s=sessionStorage.getItem('loggedInSupervisor');
-    if(s){const u=JSON.parse(s);
-    if(APPS_SCRIPT_URL){await loadFromAppsScript(u.userID);}
-    const user=usersData.find(x=>x.userID==u.userID&&x.role==='Supervisor');
-    if(user){currentUser=user;showDashboard(user);}else sessionStorage.removeItem('loggedInSupervisor');}
+    if(s){
+        const u=JSON.parse(s);
+        console.log('Auto-login from session:',u.userID);
+        // Load fresh data from Apps Script for this user
+        if(APPS_SCRIPT_URL){
+            const ok=await loadFromAppsScript(u.userID);
+            if(!ok){
+                // Apps Script failed — user must re-login
+                console.log('Apps Script failed, clearing session');
+                sessionStorage.removeItem('loggedInSupervisor');
+                return;
+            }
+        }
+        const user=usersData.find(x=>x.userID==u.userID&&x.role==='Supervisor');
+        if(user){
+            currentUser=user;showDashboard(user);
+            if(window.location.hash==='#tab-customers')switchTab('customers');
+        } else {
+            sessionStorage.removeItem('loggedInSupervisor');
+        }
+    }
 };
 
 document.getElementById('loginForm').addEventListener('submit',async function(e){
     e.preventDefault();
     const name=document.getElementById('userName').value.trim(),code=document.getElementById('userCode').value.trim();
+    if(!name||!code){showError('Please enter both User Name and User ID.');return;}
     const btn=this.querySelector('button[type="submit"]');btn.disabled=true;btn.textContent='Loading...';
-    if(APPS_SCRIPT_URL){await loadFromAppsScript(code);}
+    // Try Apps Script first — it returns only matching user's data
+    let apiOk=false;
+    if(APPS_SCRIPT_URL){apiOk=await loadFromAppsScript(code);}
+    // Validate: user must match BOTH name AND code
     const user=usersData.find(u=>u.userName.toLowerCase()===name.toLowerCase()&&String(u.userID)===code);
     btn.disabled=false;btn.textContent='Log In';
-    if(!user){showError('Invalid credentials.');return;}
+    if(!user){showError('Invalid credentials. Check your User Name and User ID.');return;}
     if(user.role!=='Supervisor'){showError('Access Denied: This page is for Supervisor role only.');return;}
     sessionStorage.setItem('loggedInSupervisor',JSON.stringify(user));currentUser=user;showDashboard(user);
 });
